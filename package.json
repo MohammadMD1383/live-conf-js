@@ -1,0 +1,27 @@
+{
+  "name": "live-conf",
+  "version": "1.0.0",
+  "description": "change your application's configuration at realtime",
+  "keywords": [
+    "live",
+    "realtime",
+    "config",
+    "dynamic",
+    "unix-socket"
+  ],
+  "homepage": "https://github.com/MohammadMD1383/live-conf-js#readme",
+  "bugs": {
+    "url": "https://github.com/MohammadMD1383/live-conf-js/issues"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/MohammadMD1383/live-conf-js.git"
+  },
+  "license": "MIT",
+  "author": "Mohammad Mostafa Dastjerdi",
+  "type": "commonjs",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  }
+}
