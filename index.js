@@ -15,8 +15,6 @@ const server = createServer(socket => {
 	});
 });
 
-// Removed sendResponse function as common.sendMessage will be used directly
-
 function processCommand(socket, command) {
 	switch (true) {
 		case command.startsWith("GET "):
@@ -26,10 +24,10 @@ function processCommand(socket, command) {
 			processSET(socket, command.substring(4));
 			break;
 		case command.startsWith("TRIGGER "):
-			processTRGGER(socket, command.substring(8)); // Typo processTRGGER remains as per original
+			processTRIGGER(socket, command.substring(8));
 			break;
 		default:
-			sendMessage(socket, `ERROR ${errors.ERROR_UNKNOWN_COMMAND}`); // Use common.sendMessage
+			sendMessage(socket, `ERROR ${errors.ERROR_UNKNOWN_COMMAND}`);
 			break;
 	}
 }
@@ -61,26 +59,26 @@ function registerConfig(key, type, endpoint) {
 function processSET(socket, command) {
 	const [key, value, ...rest] = command.split(" ");
 	if (rest.length) {
-		sendMessage(socket, `ERROR ${errors.ERROR_BAD_COMMAND}`); // Use common.sendMessage
+		sendMessage(socket, `ERROR ${errors.ERROR_BAD_COMMAND}`);
 		return;
 	}
 	
 	if (!configs.has(key)) {
-		sendMessage(socket, `ERROR ${errors.ERROR_KEY_NOT_FOUND}`); // Use common.sendMessage
+		sendMessage(socket, `ERROR ${errors.ERROR_KEY_NOT_FOUND}`);
 		return;
 	}
 	
 	const setter = configs.get(key).endpoint.set;
 	if (!setter) {
-		sendMessage(socket, `ERROR ${errors.ERROR_SET_NOT_SUPPORTED}`); // Use common.sendMessage
+		sendMessage(socket, `ERROR ${errors.ERROR_SET_NOT_SUPPORTED}`);
 		return;
 	}
 	
 	try {
 		setter(value);
-		sendMessage(socket, "OK"); // Use common.sendMessage
+		sendMessage(socket, "OK");
 	} catch (e) {
-		sendMessage(socket, `ERROR ${errors.ERROR_IN_OPERATION}`); // Use common.sendMessage
+		sendMessage(socket, `ERROR ${errors.ERROR_IN_OPERATION}`);
 	}
 }
 
@@ -92,7 +90,7 @@ function processGET(command) {
 
 }
 
-function processTRGGER(command) {
+function processTRIGGER(command) {
 
 }
 

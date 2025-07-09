@@ -1,3 +1,5 @@
+const {Buffer} = require("node:buffer");
+
 const i = (function* () {
 	let i = 1;
 	while (true) {
@@ -19,8 +21,6 @@ errors[errors["ERROR_GET_NOT_SUPPORTED"] = iota()] = "ERROR_GET_NOT_SUPPORTED";
 errors[errors["ERROR_IN_OPERATION"     ] = iota()] = "ERROR_IN_OPERATION"     ;
 //@formatter:on
 
-const { Buffer } = require('node:buffer'); // Ensure Buffer is available
-
 function sendMessage(socket, payload) {
 	const payloadBuffer = Buffer.from(payload, "utf8");
 	const lengthBuffer = Buffer.alloc(4);
@@ -33,11 +33,11 @@ class MessageParser {
 		this.receiveBuffer = Buffer.alloc(0);
 		this.expectedLength = null;
 	}
-
+	
 	appendData(data) {
 		this.receiveBuffer = Buffer.concat([this.receiveBuffer, data]);
 	}
-
+	
 	nextMessage() {
 		if (this.expectedLength === null) {
 			if (this.receiveBuffer.length >= 4) {
@@ -48,7 +48,7 @@ class MessageParser {
 				return null;
 			}
 		}
-
+		
 		if (this.expectedLength !== null && this.receiveBuffer.length >= this.expectedLength) {
 			const messageBuffer = this.receiveBuffer.subarray(0, this.expectedLength);
 			this.receiveBuffer = this.receiveBuffer.subarray(this.expectedLength);
@@ -63,5 +63,5 @@ class MessageParser {
 module.exports = {
 	errors,
 	sendMessage,
-	MessageParser,
+	MessageParser
 };
