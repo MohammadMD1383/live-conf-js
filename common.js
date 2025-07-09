@@ -19,6 +19,8 @@ errors[errors["ERROR_KEY_NOT_FOUND"    ] = iota()] = "ERROR_KEY_NOT_FOUND"    ;
 errors[errors["ERROR_SET_NOT_SUPPORTED"] = iota()] = "ERROR_SET_NOT_SUPPORTED";
 errors[errors["ERROR_GET_NOT_SUPPORTED"] = iota()] = "ERROR_GET_NOT_SUPPORTED";
 errors[errors["ERROR_IN_OPERATION"     ] = iota()] = "ERROR_IN_OPERATION"     ;
+errors[errors["ERROR_TRIGGER_NOT_FOUND"] = iota()] = "ERROR_TRIGGER_NOT_FOUND";
+errors[errors["ERROR_PARAMS_PARSE"     ] = iota()] = "ERROR_PARAMS_PARSE"     ;
 //@formatter:on
 
 function sendMessage(socket, payload) {

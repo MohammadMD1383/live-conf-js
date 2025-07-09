@@ -23,10 +23,9 @@ program
 		}
 		throw Error("invalid command");
 	})
-	.argument("<args...>", "syntax: key[=value]", (v, prev) => {
-		const [key, value] = v.split("=");
-		return [...prev ?? [], {key, value}];
-	})
+	// For GET and SET, args are key or key=value.
+	// For TRIGGER, args are triggerName or triggerName(param1,param2,...)
+	.argument("<args...>", "arguments for the command")
 	.action((pid, command, args) => {
 		const s = socket(pid);
 		if (!s) {
@@ -37,19 +36,51 @@ program
 		const clientParser = new MessageParser();
 
 		s.once("connect", () => {
-			for (const arg of args) {
-				let payload = `${command.toUpperCase()} ${arg.key}`;
-				if (command.toUpperCase() === "SET") {
-					if (arg.value === undefined) {
-						console.error(`error: missing value for set command for key "${arg.key}"`);
-						s.end();
-						process.exit(1);
+			const commandUpper = command.toUpperCase();
+			if (commandUpper === "GET" || commandUpper === "SET") {
+				for (const argString of args) {
+					const [key, value] = argString.split("=");
+					let payload = `${commandUpper} ${key}`;
+					if (commandUpper === "SET") {
+						if (value === undefined) {
+							console.error(`error: missing value for set command for key "${key}"`);
+							s.end();
+							process.exit(1); // Exiting, so no need to worry about other args
+						}
+						payload += ` ${value}`;
+					} else if (value !== undefined) { // GET command with a value part
+						console.warn(`warning: value for GET command for key "${key}" will be ignored`);
 					}
-					payload += ` ${arg.value}`;
-				} else if (arg.value !== undefined) {
-					console.warn(`warning: value for ${command.toUpperCase()} command for key "${arg.key}" will be ignored`);
+					sendMessage(s, payload);
 				}
-				sendMessage(s, payload);
+			} else if (commandUpper === "TRIGGER") {
+				// Regex to parse triggerName(param1,param2,...) or triggerName
+				const triggerRegex = /^([a-zA-Z0-9_.-]+)(?:\((.*)\))?$/;
+				for (const argString of args) {
+					const match = argString.match(triggerRegex);
+					if (!match) {
+						console.error(`error: invalid format for trigger argument: "${argString}"`);
+						// We could choose to send an error to server or just skip this arg
+						// For now, let's skip and print error. If all args fail, connection will close after 0 messages.
+						continue;
+					}
+					const triggerName = match[1];
+					let paramsString = match[2]; // This will be undefined if no parentheses, or could be empty string if event()
+
+					// Further parse paramsString: "p1,p2,\"p3,with,comma\",p4"
+					// This simple split by comma is naive if params can contain commas.
+					// For robust CSV-like parsing, a small parser or library would be better.
+					// Given the spec "param1,param2,param3...", a simple split is the first step.
+					// The client should quote params with commas if the server expects to parse them.
+					// Or, the server receives the raw paramsString and parses it.
+					// For now, let's send the raw paramsString (match[2]) or empty if undefined.
+
+					let payload = `${commandUpper} ${triggerName}`;
+					if (paramsString !== undefined) { // Only add space if there are params (even if empty string from "()")
+						payload += ` ${paramsString}`;
+					}
+					sendMessage(s, payload);
+				}
 			}
 		});
 		
