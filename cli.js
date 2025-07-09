@@ -2,6 +2,7 @@ const {program} = require("commander");
 const fs = require("node:fs");
 const net = require("node:net");
 const {errors, sendMessage, MessageParser} = require("./common");
+const {parseCliArguments} = require("./cli-parser"); // Assuming cli-parser.js is in the same directory
 
 program.name("lc");
 program.version(require("./package.json").version);
@@ -32,70 +33,62 @@ program
 		}
 		
 		const clientParser = new MessageParser();
+		let payloadsSentCount = 0;
 
 		s.once("connect", () => {
-			const commandUpper = command.toUpperCase();
-			if (commandUpper === "GET" || commandUpper === "SET") { // TODO: move command parsing to another file, not to mess up business logic
-				for (const argString of args) {
-					const [key, value] = argString.split("=");
-					let payload = `${commandUpper} ${key}`;
-					if (commandUpper === "SET") {
-						if (value === undefined) {
-							console.error(`error: missing value for set command for key "${key}"`);
-							s.end();
-							process.exit(1);
-						}
-						payload += ` ${value}`;
-					} else if (value !== undefined) { // GET command with a value part
-						console.warn(`warning: value for GET command for key "${key}" will be ignored`);
-					}
+			try {
+				const payloads = parseCliArguments(command, args);
+				payloadsSentCount = payloads.length;
+
+				if (payloadsSentCount === 0 && args.length > 0) {
+					console.error("Error: No valid payloads generated for the given arguments.");
+					s.end();
+					process.exit(1);
+					return;
+				}
+
+				if (payloadsSentCount === 0) {
+				    s.end();
+				    return;
+				}
+
+				for (const payload of payloads) {
 					sendMessage(s, payload);
 				}
-			} else if (commandUpper === "TRIGGER") {
-				// Regex to parse triggerName(param1,param2,...) or triggerName
-				for (const argString of args) {
-					const match = argString.match(/^([a-zA-Z0-9_.-]+)(?:\((.*)\))?$/);
-					if (!match) {
-						console.error(`error: invalid format for trigger argument: "${argString}"`);
-						// We could choose to send an error to server or just skip this arg
-						// For now, let's skip and print error. If all args fail, connection will close after 0 messages.
-						continue;
-					}
-					const triggerName = match[1];
-					let paramsString = match[2]; // This will be undefined if no parentheses, or could be empty string if event()
-
-					// TODO: write a parser
-					//       the parser must convert any value to its corresponding javascript type
-					//       boolean, number, string, array, object
-					//       this should also happen for SET command
-					// Further parse paramsString: "p1,p2,\"p3,with,comma\",p4"
-					// This simple split by comma is naive if params can contain commas.
-					// For robust CSV-like parsing, a small parser or library would be better.
-					// Given the spec "param1,param2,param3...", a simple split is the first step.
-					// The client should quote params with commas if the server expects to parse them.
-					// Or, the server receives the raw paramsString and parses it.
-					// For now, let's send the raw paramsString (match[2]) or empty if undefined.
-
-					let payload = `${commandUpper} ${triggerName}`;
-					if (paramsString !== undefined) { // Only add space if there are params (even if empty string from "()")
-						payload += ` ${paramsString}`;
-					}
-					sendMessage(s, payload);
-				}
+			} catch (error) {
+				console.error(`Error processing command: ${error.message}`);
+				s.end();
+				process.exit(1);
 			}
 		});
 		
-		let c = 0;
+		let messagesReceived = 0;
 		s.on("data", data => {
 			clientParser.appendData(data);
 			let response;
 			while ((response = clientParser.nextMessage()) !== null) {
-				if (++c >= args.length) s.end();
+				messagesReceived++;
 				response = response.replace(/ERROR (\d+)/, (s, ...matchedArgs) => {
-					return errors[matchedArgs[0]];
+					return errors[matchedArgs[0]] || `UNKNOWN_ERROR_CODE_${matchedArgs[0]}`;
 				});
 				console.log(response);
+				if (payloadsSentCount > 0 && messagesReceived >= payloadsSentCount) {
+					s.end();
+				} else if (payloadsSentCount === 0 && args.length === 0) {
+					// This case implies no args were given, and no payloads were generated.
+					// Commander should prevent this if <args...> is truly required.
+					// If it's reached, socket should already be closing or closed.
+					s.end();
+				}
 			}
+		});
+
+		s.on("close", () => {
+			// console.log("Connection closed.");
+		});
+
+		s.on("error", (err) => {
+			console.error(`Socket error: ${err.message}`);
 		});
 	});
 
