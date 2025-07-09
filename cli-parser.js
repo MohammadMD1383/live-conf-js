@@ -1,16 +1,16 @@
 // cli-parser.js
 
 /**
- * Parses a string value into its likely JavaScript type.
+ * Parses a string value into its likely JavaScript type for SET commands.
  * - "true" / "false" (case insensitive) become boolean.
  * - Numeric strings become numbers.
  * - Strings in single or double quotes have quotes removed.
  * @param {string} valueStr The string to parse.
  * @returns {boolean | number | string} The parsed value.
  */
-function parseValue(valueStr) {
+function parseSetValue(valueStr) {
     if (typeof valueStr !== 'string') {
-        return valueStr; // Or throw error, depending on desired strictness
+        return valueStr;
     }
 
     const lowerValueStr = valueStr.toLowerCase();
@@ -21,14 +21,11 @@ function parseValue(valueStr) {
         return false;
     }
 
-    // Check if it's a number (integer or float)
     if (!isNaN(valueStr) && !isNaN(parseFloat(valueStr))) {
-        // Handle cases like "  123  "
         const num = Number(valueStr);
-        if (String(num) === valueStr.trim()) return num; // ensures "1.2.3" is not a number
+        if (String(num) === valueStr.trim()) return num;
     }
 
-    // Handle quoted strings
     if ((valueStr.startsWith('"') && valueStr.endsWith('"')) || (valueStr.startsWith("'") && valueStr.endsWith("'"))) {
         return valueStr.substring(1, valueStr.length - 1);
     }
@@ -37,13 +34,13 @@ function parseValue(valueStr) {
 }
 
 /**
- * Parses a trigger parameter string (e.g., "param1,param2,\"a,b,c\",true") into an array of parsed values.
+ * Parses a trigger parameter string (e.g., "param1,param2,\"a,b,c\",true") into an array of RAW string parameters.
  * This parser handles parameters that are numbers, booleans, unquoted strings,
- * or double-quoted strings that can contain commas.
+ * or double-quoted strings that can contain commas. It preserves quotes for strings.
  * @param {string} paramsString The raw parameter string.
- * @returns {Array<boolean | number | string>} Array of parsed parameters.
+ * @returns {Array<string>} Array of raw parameters.
  */
-function parseTriggerParams(paramsString) {
+function parseTriggerParamsRaw(paramsString) {
     if (!paramsString || paramsString.trim() === "") {
         return [];
     }
@@ -57,25 +54,27 @@ function parseTriggerParams(paramsString) {
         const char = paramsString[i];
 
         if (char === '"') {
+            // For raw parsing, keep the quote character as part of the param if it's not for escaping
+            // but toggle state. If it's an escaped quote, add it and advance.
             if (inQuotes && i + 1 < paramsString.length && paramsString[i+1] === '"') {
-                // Escaped quote within a quote
-                currentParam += '"';
+                currentParam += '""'; // Keep as double quote for now, server will handle final unescaping
                 i++;
             } else {
                 inQuotes = !inQuotes;
-                // Don't add the quote itself to currentParam unless it's an escaped one
+                currentParam += '"'; // Add the quote
             }
         } else if (char === ',' && !inQuotes) {
-            params.push(parseValue(currentParam.trim()));
+            params.push(currentParam.trim());
             currentParam = "";
         } else {
             currentParam += char;
         }
         i++;
     }
-    params.push(parseValue(currentParam.trim())); // Add the last parameter
+    params.push(currentParam.trim()); // Add the last parameter
 
-    return params;
+    // Filter out empty strings that might result from trailing commas or empty sections.
+    return params.filter(p => p !== "");
 }
 
 
@@ -93,16 +92,11 @@ function parseCliArguments(command, args) {
         for (const argString of args) {
             const [key, ...valueParts] = argString.split("=");
             if (valueParts.length === 0) {
-                // This case should ideally be caught by commander or earlier validation
                 console.error(`error: missing value for set command for key "${key}"`);
-                // Or throw an error to be handled by the caller
-                process.exit(1); // Mirroring existing behavior in cli.js
+                process.exit(1);
             }
             const valueStr = valueParts.join("=");
-            const parsedValue = parseValue(valueStr);
-            // Server expects value as a string, but it might be typed by server later.
-            // For now, ensure it's stringified for the payload.
-            // Booleans become "true"/"false", numbers become "123", strings remain.
+            const parsedValue = parseSetValue(valueStr);
             payloads.push(`SET ${key} ${String(parsedValue)}`);
         }
     } else if (commandUpper === "GET") {
@@ -119,24 +113,22 @@ function parseCliArguments(command, args) {
             const match = argString.match(/^([a-zA-Z0-9_.-]+)(?:\((.*)\))?$/);
             if (!match) {
                 console.error(`error: invalid format for trigger argument: "${argString}"`);
-                // Skip this arg, mirroring some of cli.js's original resilience
                 continue;
             }
             const triggerName = match[1];
-            const paramsString = match[2]; // undefined if no parens, empty string if "()"
+            const paramsString = match[2];
 
-            const parsedParams = parseTriggerParams(paramsString); // paramsString can be undefined
+            const rawParams = parseTriggerParamsRaw(paramsString); // paramsString can be undefined
 
-            // Construct payload: TRIGGER triggerName parsedParam1 parsedParam2 ...
-            // Stringify parameters for sending.
-            const payload = `TRIGGER ${triggerName}${parsedParams.length > 0 ? ' ' : ''}${parsedParams.map(String).join(' ')}`;
+            // Construct payload: TRIGGER triggerName rawParamStr1 rawParamStr2 ...
+            // Parameters are already strings, just join them.
+            const payload = `TRIGGER ${triggerName}${rawParams.length > 0 ? ' ' : ''}${rawParams.join(' ')}`;
             payloads.push(payload);
         }
     } else {
-        // Should not happen if command validation is done prior
         throw new Error(`Unknown command type: ${commandUpper}`);
     }
     return payloads;
 }
 
-module.exports = { parseCliArguments, parseValue, parseTriggerParams };
+module.exports = { parseCliArguments };

@@ -2,7 +2,7 @@ const {program} = require("commander");
 const fs = require("node:fs");
 const net = require("node:net");
 const {errors, sendMessage, MessageParser} = require("./common");
-const {parseCliArguments} = require("./cli-parser");
+const {parseCliArguments} = require("./cli-parser"); // Assuming cli-parser.js is in the same directory
 
 program.name("lc");
 program.version(require("./package.json").version);
@@ -33,14 +33,13 @@ program
 		}
 		
 		const clientParser = new MessageParser();
-		let payloadsSentCount = 0; // Will be determined in 'connect' handler
+		let payloadsSentCount = 0;
 
 		s.once("connect", () => {
 			try {
 				const payloads = parseCliArguments(command, args);
 				payloadsSentCount = payloads.length;
 
-				// Note: Original TODOs in this block are now addressed by cli-parser.js
 				if (payloadsSentCount === 0 && args.length > 0) {
 					console.error("Error: No valid payloads generated for the given arguments.");
 					s.end();
@@ -48,16 +47,8 @@ program
 					return;
 				}
 
-				// If args were required by commander but somehow parseCliArguments produced no payloads
-				// (e.g. all inputs were invalid for TRIGGER),
-				// and args.length > 0, we exit above.
-				// If args.length === 0 (e.g. command that takes no args, though not current case),
-				// and payloadsSentCount is 0, it's fine, just nothing to send. Connection will close.
-				// If commander enforces <args...>, then args.length will always be > 0.
-				// So, if payloadsSentCount is 0 here, it means an error or all args were filtered.
-
-				if (payloadsSentCount === 0) { // Covers args.length === 0 or all args filtered
-				    s.end(); // Nothing to send, close gracefully.
+				if (payloadsSentCount === 0) {
+				    s.end();
 				    return;
 				}
 
@@ -72,8 +63,6 @@ program
 		});
 		
 		let messagesReceived = 0;
-		// const expectedMessages = args.length; // This is not reliable anymore. Use payloadsSentCount.
-
 		s.on("data", data => {
 			clientParser.appendData(data);
 			let response;
@@ -83,21 +72,12 @@ program
 					return errors[matchedArgs[0]] || `UNKNOWN_ERROR_CODE_${matchedArgs[0]}`;
 				});
 				console.log(response);
-				// payloadsSentCount is determined in the 'connect' handler.
-				// Ensure it's accessible here, or recalculate/pass it.
-				// For simplicity, assuming payloadsSentCount is correctly set from the 'connect' scope
-				// or that we can use the length of the originally parsed payloads.
-				// Let's refine the closing logic.
-				// The original logic was if (++c >= args.length) s.end();
-				// This should be based on number of commands sent, which is payloads.length
-				// This requires payloads to be accessible here or its length.
-				// We'll use a closure variable for payloadsSentCount from the connect handler.
-
 				if (payloadsSentCount > 0 && messagesReceived >= payloadsSentCount) {
 					s.end();
 				} else if (payloadsSentCount === 0 && args.length === 0) {
-					// No args, no commands sent, connection should have been ended already or not made.
-					// This path should ideally not be hit if connection ends earlier.
+					// This case implies no args were given, and no payloads were generated.
+					// Commander should prevent this if <args...> is truly required.
+					// If it's reached, socket should already be closing or closed.
 					s.end();
 				}
 			}
@@ -109,7 +89,6 @@ program
 
 		s.on("error", (err) => {
 			console.error(`Socket error: ${err.message}`);
-			// s.end(); // Socket might already be closed or will close.
 		});
 	});
 

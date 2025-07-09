@@ -137,10 +137,12 @@ function processGET(socket, command) {
 //           ^^^^^^^^^^^^^^^^^^
 // The `command` parameter is the string part *after* "TRIGGER "
 function processTRIGGER(socket, command) {
-	const { triggerName, paramsArray } = parseTriggerCommand(command);
+	// `parseTriggerCommand` now also handles typing of parameters.
+	const { triggerName, typedParamsArray } = parseTriggerCommand(command);
 
-	if (!triggerName) { // Should not happen if parseTriggerCommand is robust and command is not empty
-		sendMessage(socket, `ERROR ${errors.ERROR_BAD_COMMAND}`); // Or a more specific error
+	if (!triggerName && typedParamsArray.length === 0) {
+		// This might happen if command string was empty or only whitespace
+		sendMessage(socket, `ERROR ${errors.ERROR_BAD_COMMAND}`);
 		return;
 	}
 	
@@ -151,16 +153,9 @@ function processTRIGGER(socket, command) {
 	
 	const handler = triggerHandlers.get(triggerName);
 	
-	// At this point, paramsArray contains strings as sent by the client.
-	// The client's parseValue function already converted "true" to true (boolean) then String(true) to "true" (string) for sending.
-	// So, here paramsArray will be like ["123", "true", "some string"].
-	// The handler function should be prepared to receive these strings and parse them if needed,
-	// or the contract is that they are already in a usable string form.
-	// For example, if a handler expects a number, it should do Number(param).
-	// This was the implicit behavior before as well, as split(',') also yielded strings.
-
 	try {
-		handler(...paramsArray); // Spread operator passes array elements as individual arguments
+		// Pass the now typed parameters to the handler
+		handler(...typedParamsArray);
 		sendMessage(socket, "OK");
 	} catch (e) {
 		console.error(`Error executing trigger "${triggerName}":`, e);
