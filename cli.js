@@ -1,7 +1,7 @@
 const {program} = require("commander");
 const fs = require("node:fs");
 const net = require("node:net");
-const {errors} = require("./common");
+const {errors, sendMessage, MessageParser} = require("./common");
 
 program.name("lc");
 program.version(require("./package.json").version);
@@ -34,20 +34,26 @@ program
 			return;
 		}
 		
+		const clientParser = new MessageParser();
+
 		s.once("connect", () => {
 			for (const arg of args) {
-				s.write(`${command.toUpperCase()} ${arg.key} ${arg.value}`);
+				const payload = `${command.toUpperCase()} ${arg.key} ${arg.value}`;
+				sendMessage(s, payload);
 			}
 		});
 		
 		let c = 0;
 		s.on("data", data => {
-			if (++c >= args.length) s.end();
-			let response = data.toString();
-			response = response.replace(/ERROR (\d+)/, (s, ...args) => {
-				return errors[args[0]];
-			});
-			console.log(response);
+			clientParser.appendData(data);
+			let response;
+			while ((response = clientParser.nextMessage()) !== null) {
+				if (++c >= args.length) s.end();
+				response = response.replace(/ERROR (\d+)/, (s, ...matchedArgs) => {
+					return errors[matchedArgs[0]];
+				});
+				console.log(response);
+			}
 		});
 	});
 

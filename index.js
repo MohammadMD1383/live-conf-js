@@ -1,27 +1,38 @@
 const configs = new Map;
 const {createServer} = require("node:net");
 const fs = require("node:fs");
-const {errors} = require("./common");
+const {errors, sendMessage, MessageParser} = require("./common");
 
 const server = createServer(socket => {
+	const serverParser = new MessageParser();
+
 	socket.on("data", data => {
-		const command = data.toString();
-		switch (true) {
-			case command.startsWith("GET "):
-				processGET(socket, command.substring(4));
-				break;
-			case command.startsWith("SET "):
-				processSET(socket, command.substring(4));
-				break;
-			case command.startsWith("TRIGGER "):
-				processTRGGER(socket, command.substring(8));
-				break;
-			default:
-				socket.write(`ERROR ${errors.ERROR_UNKNOWN_COMMAND}`);
-				break;
+		serverParser.appendData(data);
+		let command;
+		while ((command = serverParser.nextMessage()) !== null) {
+			processCommand(socket, command);
 		}
 	});
 });
+
+// Removed sendResponse function as common.sendMessage will be used directly
+
+function processCommand(socket, command) {
+	switch (true) {
+		case command.startsWith("GET "):
+			processGET(socket, command.substring(4));
+			break;
+		case command.startsWith("SET "):
+			processSET(socket, command.substring(4));
+			break;
+		case command.startsWith("TRIGGER "):
+			processTRGGER(socket, command.substring(8)); // Typo processTRGGER remains as per original
+			break;
+		default:
+			sendMessage(socket, `ERROR ${errors.ERROR_UNKNOWN_COMMAND}`); // Use common.sendMessage
+			break;
+	}
+}
 
 const basePath = "/tmp/.live-conf";
 const socketPath = `${basePath}/${process.pid}`;
@@ -50,25 +61,26 @@ function registerConfig(key, type, endpoint) {
 function processSET(socket, command) {
 	const [key, value, ...rest] = command.split(" ");
 	if (rest.length) {
-		socket.write(`ERROR ${errors.ERROR_BAD_COMMAND}`);
+		sendMessage(socket, `ERROR ${errors.ERROR_BAD_COMMAND}`); // Use common.sendMessage
 		return;
 	}
 	
 	if (!configs.has(key)) {
-		socket.write(`ERROR ${errors.ERROR_KEY_NOT_FOUND}`);
+		sendMessage(socket, `ERROR ${errors.ERROR_KEY_NOT_FOUND}`); // Use common.sendMessage
 		return;
 	}
 	
 	const setter = configs.get(key).endpoint.set;
 	if (!setter) {
-		socket.write(`ERROR ${errors.ERROR_SET_NOT_SUPPORTED}`);
+		sendMessage(socket, `ERROR ${errors.ERROR_SET_NOT_SUPPORTED}`); // Use common.sendMessage
+		return;
 	}
 	
 	try {
 		setter(value);
-		socket.write("OK");
+		sendMessage(socket, "OK"); // Use common.sendMessage
 	} catch (e) {
-		socket.write(`ERROR ${errors.ERROR_IN_OPERATION}`);
+		sendMessage(socket, `ERROR ${errors.ERROR_IN_OPERATION}`); // Use common.sendMessage
 	}
 }
 

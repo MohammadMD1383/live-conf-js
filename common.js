@@ -19,6 +19,49 @@ errors[errors["ERROR_GET_NOT_SUPPORTED"] = iota()] = "ERROR_GET_NOT_SUPPORTED";
 errors[errors["ERROR_IN_OPERATION"     ] = iota()] = "ERROR_IN_OPERATION"     ;
 //@formatter:on
 
+const { Buffer } = require('node:buffer'); // Ensure Buffer is available
+
+function sendMessage(socket, payload) {
+	const payloadBuffer = Buffer.from(payload, "utf8");
+	const lengthBuffer = Buffer.alloc(4);
+	lengthBuffer.writeUInt32BE(payloadBuffer.length, 0);
+	socket.write(Buffer.concat([lengthBuffer, payloadBuffer]));
+}
+
+class MessageParser {
+	constructor() {
+		this.receiveBuffer = Buffer.alloc(0);
+		this.expectedLength = null;
+	}
+
+	appendData(data) {
+		this.receiveBuffer = Buffer.concat([this.receiveBuffer, data]);
+	}
+
+	nextMessage() {
+		if (this.expectedLength === null) {
+			if (this.receiveBuffer.length >= 4) {
+				this.expectedLength = this.receiveBuffer.readUInt32BE(0);
+				this.receiveBuffer = this.receiveBuffer.subarray(4);
+			} else {
+				// Not enough data to read length
+				return null;
+			}
+		}
+
+		if (this.expectedLength !== null && this.receiveBuffer.length >= this.expectedLength) {
+			const messageBuffer = this.receiveBuffer.subarray(0, this.expectedLength);
+			this.receiveBuffer = this.receiveBuffer.subarray(this.expectedLength);
+			this.expectedLength = null;
+			return messageBuffer.toString("utf8");
+		}
+		// Not enough data for the full message
+		return null;
+	}
+}
+
 module.exports = {
-	errors
+	errors,
+	sendMessage,
+	MessageParser,
 };
