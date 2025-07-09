@@ -23,7 +23,7 @@ program
 		}
 		throw Error("invalid command");
 	})
-	.argument("<args...>", "syntax: key=value", (v, prev) => {
+	.argument("<args...>", "syntax: key[=value]", (v, prev) => {
 		const [key, value] = v.split("=");
 		return [...prev ?? [], {key, value}];
 	})
@@ -38,7 +38,17 @@ program
 
 		s.once("connect", () => {
 			for (const arg of args) {
-				const payload = `${command.toUpperCase()} ${arg.key} ${arg.value}`;
+				let payload = `${command.toUpperCase()} ${arg.key}`;
+				if (command.toUpperCase() === "SET") {
+					if (arg.value === undefined) {
+						console.error(`error: missing value for set command for key "${arg.key}"`);
+						s.end();
+						process.exit(1);
+					}
+					payload += ` ${arg.value}`;
+				} else if (arg.value !== undefined) {
+					console.warn(`warning: value for ${command.toUpperCase()} command for key "${arg.key}" will be ignored`);
+				}
 				sendMessage(s, payload);
 			}
 		});
