@@ -83,10 +83,6 @@ program
 			}
 		});
 
-		s.on("close", () => {
-			// console.log("Connection closed.");
-		});
-
 		s.on("error", (err) => {
 			console.error(`Socket error: ${err.message}`);
 		});

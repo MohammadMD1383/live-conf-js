@@ -1,5 +1,5 @@
 const configs = new Map();
-const triggerHandlers = new Map(); // To store trigger handlers
+const triggerHandlers = new Map();
 const {createServer} = require("node:net");
 const fs = require("node:fs");
 const {errors, sendMessage, MessageParser} = require("./common");
@@ -94,19 +94,8 @@ function processSET(socket, command) {
 	}
 }
 
-function cleanup() {
-	for (const path of cleanupPaths) {
-		if (fs.existsSync(path)) {
-			try {
-				fs.unlinkSync(path);
-			} catch (e) {
-				// Ignore errors during cleanup, e.g. if file is already removed
-				console.warn(`Warning: could not unlink ${path} during cleanup: ${e.message}`);
-			}
-		}
-	}
-}
-
+// GET key
+//     ^^^
 function processGET(socket, command) {
 	const [key, ...rest] = command.split(" ");
 	if (rest.length) {
@@ -127,7 +116,7 @@ function processGET(socket, command) {
 	
 	try {
 		const value = getter();
-		sendMessage(socket, String(value)); // Ensure value is stringified
+		sendMessage(socket, String(value));
 	} catch (e) {
 		sendMessage(socket, `ERROR ${errors.ERROR_IN_OPERATION}`);
 	}
@@ -135,11 +124,9 @@ function processGET(socket, command) {
 
 // TRIGGER triggerName params...
 //           ^^^^^^^^^^^^^^^^^^
-// The `command` parameter is the string part *after* "TRIGGER "
 function processTRIGGER(socket, command) {
-	// `parseTriggerCommand` now also handles typing of parameters.
-	const { triggerName, typedParamsArray } = parseTriggerCommand(command);
-
+	const {triggerName, typedParamsArray} = parseTriggerCommand(command);
+	
 	if (!triggerName && typedParamsArray.length === 0) {
 		// This might happen if command string was empty or only whitespace
 		sendMessage(socket, `ERROR ${errors.ERROR_BAD_COMMAND}`);
@@ -163,6 +150,20 @@ function processTRIGGER(socket, command) {
 	}
 }
 
+function cleanup() {
+	for (const path of cleanupPaths) {
+		if (fs.existsSync(path)) {
+			try {
+				fs.unlinkSync(path);
+			} catch (e) {
+				// Ignore errors during cleanup, e.g. if file is already removed
+				console.warn(`Warning: could not unlink ${path} during cleanup: ${e.message}`);
+			}
+		}
+	}
+}
+
+// noinspection JSUnusedGlobalSymbols
 module.exports = {
 	alias,
 	registerConfig,
