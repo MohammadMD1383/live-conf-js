@@ -3,6 +3,7 @@ const triggerHandlers = new Map(); // To store trigger handlers
 const {createServer} = require("node:net");
 const fs = require("node:fs");
 const {errors, sendMessage, MessageParser} = require("./common");
+const {parseTriggerCommand} = require("./server-command-parser");
 
 const server = createServer(socket => {
 	const serverParser = new MessageParser();
@@ -134,16 +135,13 @@ function processGET(socket, command) {
 
 // TRIGGER triggerName params...
 //           ^^^^^^^^^^^^^^^^^^
-function processTRIGGER(socket, command) { // TODO: move parsing logic to another file, keeping only business logic here
-	const firstSpaceIndex = command.indexOf(" ");
-	let triggerName;
-	let paramsString = "";
-	
-	if (firstSpaceIndex === -1) {
-		triggerName = command; // No params
-	} else {
-		triggerName = command.substring(0, firstSpaceIndex);
-		paramsString = command.substring(firstSpaceIndex + 1);
+// The `command` parameter is the string part *after* "TRIGGER "
+function processTRIGGER(socket, command) {
+	const { triggerName, paramsArray } = parseTriggerCommand(command);
+
+	if (!triggerName) { // Should not happen if parseTriggerCommand is robust and command is not empty
+		sendMessage(socket, `ERROR ${errors.ERROR_BAD_COMMAND}`); // Or a more specific error
+		return;
 	}
 	
 	if (!triggerHandlers.has(triggerName)) {
@@ -152,41 +150,15 @@ function processTRIGGER(socket, command) { // TODO: move parsing logic to anothe
 	}
 	
 	const handler = triggerHandlers.get(triggerName);
-	let paramsArray = [];
 	
-	if (paramsString) {
-		// This is a naive split by comma.
-		// If params can contain commas and are quoted (e.g., "param1,still1",param2),
-		// a more sophisticated CSV-like parser would be needed here.
-		// For now, assuming params are simple or client `cli.js` pre-formats them
-		// such that simple comma split is sufficient, or sends them in a way server expects.
-		// The current cli.js sends the raw string from inside the parentheses.
-		// "1,2,3" -> ["1","2","3"]
-		// "\"hi\",test" -> ["\"hi\"","test"] (quotes become part of the param)
-		// If cli.js were to send "hi,test" for one-param-trig("hi,test"), then this split is fine.
-		// If cli.js sends `TRIGGER one-param-trig "hi,test"`, then paramsString is `"hi,test"`.
-		// The current cli.js sends `TRIGGER one-param-trig hi,test` if input is `one-param-trig(hi,test)`
-		// and `TRIGGER one-param-trig "hi"` if input is `one-param-trig("hi")`
-		// So `paramsString` will be `hi,test` or `"hi"`.
-		// We should aim to parse these into an array of strings.
-		// A robust way is to parse CSV-like strings. For now, simple split:
-		try {
-			// Attempt to parse as if it's a JSON array if it looks like one,
-			// otherwise split by comma. This is still a heuristic.
-			// A better approach specified by the message format would be ideal.
-			// Assuming parameters are comma-separated as per plan.
-			// If a parameter is `\"quoted string\"`, it will be passed as is.
-			paramsArray = paramsString.split(",").map(p => p.trim());
-			// If paramsString was empty (e.g. trigger()), split will give [''], filter that out.
-			if (paramsArray.length === 1 && paramsArray[0] === "") {
-				paramsArray = [];
-			}
-		} catch (e) {
-			sendMessage(socket, `ERROR ${errors.ERROR_PARAMS_PARSE}`);
-			return;
-		}
-	}
-	
+	// At this point, paramsArray contains strings as sent by the client.
+	// The client's parseValue function already converted "true" to true (boolean) then String(true) to "true" (string) for sending.
+	// So, here paramsArray will be like ["123", "true", "some string"].
+	// The handler function should be prepared to receive these strings and parse them if needed,
+	// or the contract is that they are already in a usable string form.
+	// For example, if a handler expects a number, it should do Number(param).
+	// This was the implicit behavior before as well, as split(',') also yielded strings.
+
 	try {
 		handler(...paramsArray); // Spread operator passes array elements as individual arguments
 		sendMessage(socket, "OK");
