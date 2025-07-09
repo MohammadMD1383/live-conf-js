@@ -83,11 +83,42 @@ function processSET(socket, command) {
 }
 
 function cleanup() {
-
+	for (const path of cleanupPaths) {
+		if (fs.existsSync(path)) {
+			try {
+				fs.unlinkSync(path);
+			} catch (e) {
+				// Ignore errors during cleanup, e.g. if file is already removed
+				console.warn(`Warning: could not unlink ${path} during cleanup: ${e.message}`);
+			}
+		}
+	}
 }
 
-function processGET(command) {
+function processGET(socket, command) {
+	const [key, ...rest] = command.split(" ");
+	if (rest.length) {
+		sendMessage(socket, `ERROR ${errors.ERROR_BAD_COMMAND}`);
+		return;
+	}
 
+	if (!configs.has(key)) {
+		sendMessage(socket, `ERROR ${errors.ERROR_KEY_NOT_FOUND}`);
+		return;
+	}
+
+	const getter = configs.get(key).endpoint.get;
+	if (!getter) {
+		sendMessage(socket, `ERROR ${errors.ERROR_GET_NOT_SUPPORTED}`);
+		return;
+	}
+
+	try {
+		const value = getter();
+		sendMessage(socket, String(value)); // Ensure value is stringified
+	} catch (e) {
+		sendMessage(socket, `ERROR ${errors.ERROR_IN_OPERATION}`);
+	}
 }
 
 function processTRIGGER(command) {
@@ -96,7 +127,9 @@ function processTRIGGER(command) {
 
 module.exports = {
 	alias,
-	registerConfig
+	registerConfig,
+	configs, // Export for test access if needed, though direct manipulation is usually avoided
+	cleanupPaths // Export for test access if needed
 };
 
 process.on("exit", cleanup);
