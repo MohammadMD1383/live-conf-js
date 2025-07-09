@@ -1,5 +1,5 @@
 {
-	"name": "live-conf",
+	"name": "hot-conf",
 	"version": "1.0.0",
 	"description": "change your application's configuration at realtime",
 	"keywords": [
