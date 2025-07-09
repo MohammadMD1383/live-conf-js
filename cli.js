@@ -23,8 +23,6 @@ program
 		}
 		throw Error("invalid command");
 	})
-	// For GET and SET, args are key or key=value.
-	// For TRIGGER, args are triggerName or triggerName(param1,param2,...)
 	.argument("<args...>", "arguments for the command")
 	.action((pid, command, args) => {
 		const s = socket(pid);
@@ -37,7 +35,7 @@ program
 
 		s.once("connect", () => {
 			const commandUpper = command.toUpperCase();
-			if (commandUpper === "GET" || commandUpper === "SET") {
+			if (commandUpper === "GET" || commandUpper === "SET") { // TODO: move command parsing to another file, not to mess up business logic
 				for (const argString of args) {
 					const [key, value] = argString.split("=");
 					let payload = `${commandUpper} ${key}`;
@@ -45,7 +43,7 @@ program
 						if (value === undefined) {
 							console.error(`error: missing value for set command for key "${key}"`);
 							s.end();
-							process.exit(1); // Exiting, so no need to worry about other args
+							process.exit(1);
 						}
 						payload += ` ${value}`;
 					} else if (value !== undefined) { // GET command with a value part
@@ -55,9 +53,8 @@ program
 				}
 			} else if (commandUpper === "TRIGGER") {
 				// Regex to parse triggerName(param1,param2,...) or triggerName
-				const triggerRegex = /^([a-zA-Z0-9_.-]+)(?:\((.*)\))?$/;
 				for (const argString of args) {
-					const match = argString.match(triggerRegex);
+					const match = argString.match(/^([a-zA-Z0-9_.-]+)(?:\((.*)\))?$/);
 					if (!match) {
 						console.error(`error: invalid format for trigger argument: "${argString}"`);
 						// We could choose to send an error to server or just skip this arg
@@ -67,6 +64,10 @@ program
 					const triggerName = match[1];
 					let paramsString = match[2]; // This will be undefined if no parentheses, or could be empty string if event()
 
+					// TODO: write a parser
+					//       the parser must convert any value to its corresponding javascript type
+					//       boolean, number, string, array, object
+					//       this should also happen for SET command
 					// Further parse paramsString: "p1,p2,\"p3,with,comma\",p4"
 					// This simple split by comma is naive if params can contain commas.
 					// For robust CSV-like parsing, a small parser or library would be better.

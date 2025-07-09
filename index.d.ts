@@ -14,3 +14,4 @@ declare type ConfigTypeMap = {
 
 export function alias(id: string): void;
 export function registerConfig<Type extends keyof ConfigTypeMap>(key: string, type: Type, endpoint: ConfigEndpoint<ConfigTypeMap[Type]>): void;
+export function on(triggerName: string, callback: (...args: any[]) => void): void;

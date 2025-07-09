@@ -6,7 +6,7 @@ const {errors, sendMessage, MessageParser} = require("./common");
 
 const server = createServer(socket => {
 	const serverParser = new MessageParser();
-
+	
 	socket.on("data", data => {
 		serverParser.appendData(data);
 		let command;
@@ -56,11 +56,11 @@ function registerConfig(key, type, endpoint) {
 }
 
 function on(triggerName, callback) {
-	if (typeof triggerName !== 'string' || !triggerName) {
-		throw new Error('Trigger name must be a non-empty string.');
+	if (typeof triggerName !== "string" || !triggerName) {
+		throw new Error("Trigger name must be a non-empty string.");
 	}
-	if (typeof callback !== 'function') {
-		throw new Error('Callback must be a function.');
+	if (typeof callback !== "function") {
+		throw new Error("Callback must be a function.");
 	}
 	triggerHandlers.set(triggerName, callback);
 }
@@ -112,18 +112,18 @@ function processGET(socket, command) {
 		sendMessage(socket, `ERROR ${errors.ERROR_BAD_COMMAND}`);
 		return;
 	}
-
+	
 	if (!configs.has(key)) {
 		sendMessage(socket, `ERROR ${errors.ERROR_KEY_NOT_FOUND}`);
 		return;
 	}
-
+	
 	const getter = configs.get(key).endpoint.get;
 	if (!getter) {
 		sendMessage(socket, `ERROR ${errors.ERROR_GET_NOT_SUPPORTED}`);
 		return;
 	}
-
+	
 	try {
 		const value = getter();
 		sendMessage(socket, String(value)); // Ensure value is stringified
@@ -134,26 +134,26 @@ function processGET(socket, command) {
 
 // TRIGGER triggerName params...
 //           ^^^^^^^^^^^^^^^^^^
-function processTRIGGER(socket, command) {
-	const firstSpaceIndex = command.indexOf(' ');
+function processTRIGGER(socket, command) { // TODO: move parsing logic to another file, keeping only business logic here
+	const firstSpaceIndex = command.indexOf(" ");
 	let triggerName;
-	let paramsString = '';
-
+	let paramsString = "";
+	
 	if (firstSpaceIndex === -1) {
 		triggerName = command; // No params
 	} else {
 		triggerName = command.substring(0, firstSpaceIndex);
 		paramsString = command.substring(firstSpaceIndex + 1);
 	}
-
+	
 	if (!triggerHandlers.has(triggerName)) {
 		sendMessage(socket, `ERROR ${errors.ERROR_TRIGGER_NOT_FOUND}`);
 		return;
 	}
-
+	
 	const handler = triggerHandlers.get(triggerName);
 	let paramsArray = [];
-
+	
 	if (paramsString) {
 		// This is a naive split by comma.
 		// If params can contain commas and are quoted (e.g., "param1,still1",param2),
@@ -176,17 +176,17 @@ function processTRIGGER(socket, command) {
 			// A better approach specified by the message format would be ideal.
 			// Assuming parameters are comma-separated as per plan.
 			// If a parameter is `\"quoted string\"`, it will be passed as is.
-			paramsArray = paramsString.split(',').map(p => p.trim());
+			paramsArray = paramsString.split(",").map(p => p.trim());
 			// If paramsString was empty (e.g. trigger()), split will give [''], filter that out.
-			if (paramsArray.length === 1 && paramsArray[0] === '') {
-			    paramsArray = [];
+			if (paramsArray.length === 1 && paramsArray[0] === "") {
+				paramsArray = [];
 			}
 		} catch (e) {
 			sendMessage(socket, `ERROR ${errors.ERROR_PARAMS_PARSE}`);
 			return;
 		}
 	}
-
+	
 	try {
 		handler(...paramsArray); // Spread operator passes array elements as individual arguments
 		sendMessage(socket, "OK");
@@ -199,7 +199,7 @@ function processTRIGGER(socket, command) {
 module.exports = {
 	alias,
 	registerConfig,
-	on // Export the 'on' function for registering triggers
+	on
 };
 
 process.on("exit", cleanup);
